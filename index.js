@@ -16,7 +16,7 @@ app.use(cors({
     'http://localhost:3000', // local frontend
     'https://foodiefinds-blush.vercel.app' // deployed frontend
   ],
-  credentials: true // allow cookies
+  credentials: true // allow cookies to be sent
 }));
 app.use(express.json());
 app.use(cookieParser());
@@ -47,7 +47,7 @@ app.post('/api/admin-login', (req, res) => {
   if (email === 'admin@foodiefinds.com' && password === 'admin123') {
     res.cookie('auth', 'true', {
       httpOnly: true,
-      maxAge: 24*60*60*1000, // 1 day
+      maxAge: 24 * 60 * 60 * 1000, // 1 day
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production'
     });
@@ -62,7 +62,8 @@ app.get("/api/dishes", async (req, res) => {
   try {
     const dishes = await Dish.find().sort({ id: 1 });
     res.json(dishes);
-  } catch {
+  } catch (error) {
+    console.error("Fetch Dishes Error:", error);
     res.status(500).json({ message: "Failed to fetch dishes" });
   }
 });
@@ -71,9 +72,10 @@ app.get("/api/dishes", async (req, res) => {
 app.get('/api/dishes/:id', async (req, res) => {
   try {
     const dish = await Dish.findOne({ id: parseInt(req.params.id) });
-    if (dish) res.json(dish);
-    else res.status(404).json({ message: "Dish not found" });
+    if (dish) return res.json(dish);
+    return res.status(404).json({ message: "Dish not found" });
   } catch (error) {
+    console.error("Fetch Dish Error:", error);
     res.status(500).json({ message: "Error fetching dish" });
   }
 });
@@ -83,22 +85,35 @@ app.post("/api/dishes", async (req, res) => {
   try {
     const data = req.body;
 
+    // Bulk insert
     if (Array.isArray(data)) {
-      const result = await Dish.insertMany(data);
+      const lastDish = await Dish.findOne().sort({ id: -1 });
+      let nextId = lastDish && lastDish.id ? lastDish.id + 1 : 1;
+
+      const dishesWithIds = data.map(d => ({
+        id: nextId++,
+        name: d.name,
+        price: d.price,
+        description: d.description || '',
+        image: d.image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"
+      }));
+
+      const result = await Dish.insertMany(dishesWithIds);
       return res.status(201).json(result);
     }
 
+    // Single insert
     const { name, price, description, image } = data;
     if (!name || !price) return res.status(400).json({ message: "Name and Price are required" });
 
     const lastDish = await Dish.findOne().sort({ id: -1 });
     const nextId = lastDish && lastDish.id ? lastDish.id + 1 : 1;
 
-    const dish = await Dish.create({ 
+    const dish = await Dish.create({
       id: nextId,
-      name, 
-      price, 
-      description, 
+      name,
+      price,
+      description: description || '',
       image: image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"
     });
 
@@ -106,12 +121,12 @@ app.post("/api/dishes", async (req, res) => {
     res.status(201).json(dish);
 
   } catch (error) {
-    console.error("Save Error:", error);
+    console.error("Save Dish Error:", error);
     res.status(500).json({ message: "Failed to save dish" });
   }
 });
 
-/* ---------------- SERVER ---------------- */
+/* ---------------- 6. SERVER ---------------- */
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
