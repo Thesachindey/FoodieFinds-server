@@ -10,13 +10,18 @@ const PORT = process.env.PORT || 5000;
 /* ---------------- 1. CONFIG ---------------- */
 const MONGO_URI = process.env.MONGO_URI;
 
+if (!MONGO_URI) {
+  console.error("❌ MONGO_URI is missing in .env");
+  process.exit(1);
+}
+
 /* ---------------- 2. MIDDLEWARE ---------------- */
 app.use(cors({
   origin: [
-    'http://localhost:3000', // local frontend
-    'https://foodiefinds-blush.vercel.app' // deployed frontend
+    'http://localhost:3000',                  // local frontend
+    'https://foodiefinds-blush.vercel.app'   // deployed frontend
   ],
-  credentials: true // allow cookies to be sent
+  credentials: true
 }));
 app.use(express.json());
 app.use(cookieParser());
@@ -25,14 +30,17 @@ app.use(cookieParser());
 mongoose
   .connect(MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
-  .catch((err) => console.error("❌ MongoDB Error:", err));
+  .catch((err) => {
+    console.error("❌ MongoDB Error:", err);
+    process.exit(1);
+  });
 
 /* ---------------- 4. SCHEMA ---------------- */
 const dishSchema = new mongoose.Schema({
   id: { type: Number, unique: true },
   name: { type: String, required: true, trim: true },
   price: { type: String, required: true },
-  description: String,
+  description: { type: String, default: '' },
   image: { type: String, default: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c" }
 }, { timestamps: true });
 
@@ -49,7 +57,7 @@ app.post('/api/admin-login', (req, res) => {
       httpOnly: true,
       maxAge: 24 * 60 * 60 * 1000, // 1 day
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production'
+      secure: process.env.NODE_ENV === 'production' // HTTPS only on prod
     });
     return res.json({ message: 'Login successful' });
   }
@@ -57,7 +65,7 @@ app.post('/api/admin-login', (req, res) => {
   res.status(401).json({ message: 'Invalid email or password' });
 });
 
-// GET all dishes
+// GET ALL DISHES
 app.get("/api/dishes", async (req, res) => {
   try {
     const dishes = await Dish.find().sort({ id: 1 });
@@ -68,27 +76,27 @@ app.get("/api/dishes", async (req, res) => {
   }
 });
 
-// GET single dish by ID
-app.get('/api/dishes/:id', async (req, res) => {
+// GET SINGLE DISH BY ID
+app.get("/api/dishes/:id", async (req, res) => {
   try {
     const dish = await Dish.findOne({ id: parseInt(req.params.id) });
-    if (dish) return res.json(dish);
-    return res.status(404).json({ message: "Dish not found" });
+    if (!dish) return res.status(404).json({ message: "Dish not found" });
+    res.json(dish);
   } catch (error) {
     console.error("Fetch Dish Error:", error);
     res.status(500).json({ message: "Error fetching dish" });
   }
 });
 
-// POST single or bulk dishes
+// POST SINGLE OR BULK DISHES
 app.post("/api/dishes", async (req, res) => {
   try {
     const data = req.body;
 
-    // Bulk insert
+    // BULK INSERT
     if (Array.isArray(data)) {
       const lastDish = await Dish.findOne().sort({ id: -1 });
-      let nextId = lastDish && lastDish.id ? lastDish.id + 1 : 1;
+      let nextId = lastDish ? lastDish.id + 1 : 1;
 
       const dishesWithIds = data.map(d => ({
         id: nextId++,
@@ -102,12 +110,12 @@ app.post("/api/dishes", async (req, res) => {
       return res.status(201).json(result);
     }
 
-    // Single insert
+    // SINGLE INSERT
     const { name, price, description, image } = data;
     if (!name || !price) return res.status(400).json({ message: "Name and Price are required" });
 
     const lastDish = await Dish.findOne().sort({ id: -1 });
-    const nextId = lastDish && lastDish.id ? lastDish.id + 1 : 1;
+    const nextId = lastDish ? lastDish.id + 1 : 1;
 
     const dish = await Dish.create({
       id: nextId,
