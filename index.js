@@ -15,9 +15,8 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-/* ---------------- 2. MIDDLEWARE (FIXED) ---------------- */
+/* ---------------- 2. MIDDLEWARE ---------------- */
 app.use(cors({
-  // Allow ALL origins to connect (Fixes CORS blocking issues)
   origin: function (origin, callback) {
     return callback(null, true); 
   },
@@ -55,20 +54,20 @@ app.post('/api/admin-login', (req, res) => {
   if (email === 'admin@foodiefinds.com' && password === 'admin123') {
     res.cookie('auth', 'true', {
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
+      maxAge: 24 * 60 * 60 * 1000, 
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production' // HTTPS only on prod
+      secure: process.env.NODE_ENV === 'production' 
     });
     return res.json({ message: 'Login successful' });
   }
-
   res.status(401).json({ message: 'Invalid email or password' });
 });
 
 // GET ALL DISHES
 app.get("/api/dishes", async (req, res) => {
   try {
-    const dishes = await Dish.find().sort({ id: 1 });
+    // Sort by id, but use _id as fallback if id is missing
+    const dishes = await Dish.find().sort({ id: 1, _id: 1 });
     res.json(dishes);
   } catch (error) {
     console.error("Fetch Dishes Error:", error);
@@ -76,48 +75,41 @@ app.get("/api/dishes", async (req, res) => {
   }
 });
 
-// GET SINGLE DISH (Handles both "1" and "696bbcf...")
+// GET SINGLE DISH
 app.get("/api/dishes/:id", async (req, res) => {
   const param = req.params.id;
-
   try {
     let query;
-
-    // 1. If it looks like a MongoDB ID (24 hex characters), search by _id
     if (mongoose.Types.ObjectId.isValid(param)) {
       query = { _id: param };
-    } 
-    // 2. Otherwise, assume it's a Number (Custom ID)
-    else {
+    } else {
       query = { id: parseInt(param) };
     }
 
     const dish = await Dish.findOne(query);
-
-    if (!dish) {
-      return res.status(404).json({ message: "Dish not found" });
-    }
+    if (!dish) return res.status(404).json({ message: "Dish not found" });
     
     res.json(dish);
-
   } catch (error) {
     console.error("Fetch Dish Error:", error);
     res.status(500).json({ message: "Error fetching dish" });
   }
 });
 
-// POST SINGLE OR BULK DISHES
+/* ---------------- 6. FIXED POST ROUTE ---------------- */
 app.post("/api/dishes", async (req, res) => {
   try {
     const data = req.body;
 
-    // BULK INSERT
-    if (Array.isArray(data)) {
-      const lastDish = await Dish.findOne().sort({ id: -1 });
-      let nextId = lastDish ? lastDish.id + 1 : 1;
+    // --- FIX 1: Robust ID Calculation ---
+    // We strictly look for dishes that actually HAVE an 'id' field to avoid NaN errors
+    const lastDish = await Dish.findOne({ id: { $exists: true } }).sort({ id: -1 });
+    let nextId = (lastDish && lastDish.id) ? lastDish.id + 1 : 1;
 
+    // A. BULK INSERT
+    if (Array.isArray(data)) {
       const dishesWithIds = data.map(d => ({
-        id: nextId++,
+        id: nextId++, // Increment for each item in array
         name: d.name,
         price: d.price,
         description: d.description || '',
@@ -128,12 +120,9 @@ app.post("/api/dishes", async (req, res) => {
       return res.status(201).json(result);
     }
 
-    // SINGLE INSERT
+    // B. SINGLE INSERT
     const { name, price, description, image } = data;
     if (!name || !price) return res.status(400).json({ message: "Name and Price are required" });
-
-    const lastDish = await Dish.findOne().sort({ id: -1 });
-    const nextId = lastDish ? lastDish.id + 1 : 1;
 
     const dish = await Dish.create({
       id: nextId,
@@ -143,16 +132,17 @@ app.post("/api/dishes", async (req, res) => {
       image: image || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c"
     });
 
-    console.log(`Saved: ${dish.name} (ID: ${dish.id})`);
+    console.log(`✅ Saved: ${dish.name} (ID: ${dish.id})`);
     res.status(201).json(dish);
 
   } catch (error) {
-    console.error("Save Dish Error:", error);
-    res.status(500).json({ message: "Failed to save dish" });
+    console.error("❌ Save Dish Error:", error); 
+    // Return the actual error message so you can see it in Frontend Toast
+    res.status(500).json({ message: error.message || "Failed to save dish" });
   }
 });
 
-/* ---------------- 6. SERVER ---------------- */
+/* ---------------- SERVER ---------------- */
 app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
 });
