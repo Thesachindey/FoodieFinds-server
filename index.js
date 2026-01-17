@@ -16,16 +16,14 @@ if (!MONGO_URI) {
 }
 
 /* ---------------- 2. MIDDLEWARE ---------------- */
+/* ---------------- UPDATE MIDDLEWARE SECTION ---------------- */
 app.use(cors({
-  origin: [
-    'http://localhost:3000',                  // local frontend
-    'https://foodiefinds-blush.vercel.app'   // deployed frontend
-  ],
+  // This function allows ANY origin to connect (Solves the blocking issue)
+  origin: function (origin, callback) {
+    return callback(null, true); 
+  },
   credentials: true
 }));
-app.use(express.json());
-app.use(cookieParser());
-
 /* ---------------- 3. DB CONNECT ---------------- */
 mongoose
   .connect(MONGO_URI)
