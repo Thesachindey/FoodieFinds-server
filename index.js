@@ -15,15 +15,17 @@ if (!MONGO_URI) {
   process.exit(1);
 }
 
-/* ---------------- 2. MIDDLEWARE ---------------- */
-/* ---------------- UPDATE MIDDLEWARE SECTION ---------------- */
+/* ---------------- 2. MIDDLEWARE (FIXED) ---------------- */
 app.use(cors({
-  // This function allows ANY origin to connect (Solves the blocking issue)
+  // Allow ALL origins to connect (Fixes CORS blocking issues)
   origin: function (origin, callback) {
     return callback(null, true); 
   },
   credentials: true
 }));
+app.use(express.json());
+app.use(cookieParser());
+
 /* ---------------- 3. DB CONNECT ---------------- */
 mongoose
   .connect(MONGO_URI)
@@ -74,7 +76,6 @@ app.get("/api/dishes", async (req, res) => {
   }
 });
 
-// GET SINGLE DISH BY ID
 // GET SINGLE DISH (Handles both "1" and "696bbcf...")
 app.get("/api/dishes/:id", async (req, res) => {
   const param = req.params.id;
