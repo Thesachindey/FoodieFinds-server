@@ -77,11 +77,30 @@ app.get("/api/dishes", async (req, res) => {
 });
 
 // GET SINGLE DISH BY ID
+// GET SINGLE DISH (Handles both "1" and "696bbcf...")
 app.get("/api/dishes/:id", async (req, res) => {
+  const param = req.params.id;
+
   try {
-    const dish = await Dish.findOne({ id: parseInt(req.params.id) });
-    if (!dish) return res.status(404).json({ message: "Dish not found" });
+    let query;
+
+    // 1. If it looks like a MongoDB ID (24 hex characters), search by _id
+    if (mongoose.Types.ObjectId.isValid(param)) {
+      query = { _id: param };
+    } 
+    // 2. Otherwise, assume it's a Number (Custom ID)
+    else {
+      query = { id: parseInt(param) };
+    }
+
+    const dish = await Dish.findOne(query);
+
+    if (!dish) {
+      return res.status(404).json({ message: "Dish not found" });
+    }
+    
     res.json(dish);
+
   } catch (error) {
     console.error("Fetch Dish Error:", error);
     res.status(500).json({ message: "Error fetching dish" });
